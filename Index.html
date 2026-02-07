@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giva | Infinite Memory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { background: #020617; color: #f8fafc; font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.05); }
+        .memory-bar { height: 4px; background: #1e293b; border-radius: 2px; overflow: hidden; }
+        .memory-progress { height: 100%; background: linear-gradient(90deg, #4f46e5, #818cf8); width: 0.1%; transition: width 0.5s; }
+        pre { background: #0f172a !important; padding: 1rem; border-radius: 0.75rem; border: 1px solid #1e293b; position: relative; }
+        .msg { animation: slide 0.3s ease-out; }
+        @keyframes slide { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+    </style>
+</head>
+<body class="h-screen flex items-center justify-center p-4">
+
+    <main class="w-full max-w-4xl h-[90vh] glass rounded-[2rem] flex flex-col shadow-2xl overflow-hidden border border-white/5">
+        <header class="p-6 border-b border-white/10 bg-slate-900/50 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center font-black text-xl shadow-indigo-500/20 shadow-2xl">G</div>
+                <div>
+                    <h1 class="text-sm font-bold">GIVA MEMORY ELITE</h1>
+                    <div class="flex items-center gap-2 mt-1">
+                        <div class="memory-bar w-24"><div id="mem-fill" class="memory-progress"></div></div>
+                        <span class="text-[9px] text-slate-500 font-mono uppercase tracking-tighter">Local Storage: <span id="mem-text">0.1GB</span> / 100GB</span>
+                    </div>
+                </div>
+            </div>
+            <button id="reset" class="text-[10px] font-bold text-red-400 hover:text-red-300 transition-colors uppercase tracking-widest bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20">Wipe Data</button>
+        </header>
+
+        <div id="chat" class="flex-1 overflow-y-auto p-8 space-y-8 scroll-smooth"></div>
+
+        <div class="p-6 bg-slate-950/50 border-t border-white/5">
+            <form id="f" class="relative max-w-3xl mx-auto">
+                <input type="text" id="i" autocomplete="off" placeholder="Message with persistent memory..." 
+                    class="w-full bg-slate-800/40 border border-white/10 rounded-2xl pl-6 pr-14 py-4 text-sm focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all text-white">
+                <button type="submit" class="absolute right-2 top-2 bottom-2 px-5 bg-indigo-600 rounded-xl text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <script>
+        const KEY = "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";
+        const chat = document.getElementById('chat');
+        const form = document.getElementById('f');
+        const input = document.getElementById('i');
+        const memFill = document.getElementById('mem-fill');
+        const memText = document.getElementById('mem-text');
+
+        // Load Memory from Local Storage
+        let history = JSON.parse(localStorage.getItem('giva_memory')) || [
+            { role: "system", content: "You are Giva Elite. You have persistent memory. Use markdown." }
+        ];
+
+        // Render existing history on boot
+        const init = () => {
+            history.filter(m => m.role !== 'system').forEach(m => renderMsg(m.role, m.content));
+            updateMemUI();
+        };
+
+        const renderMsg = (role, text) => {
+            const div = document.createElement('div');
+            div.className = `flex gap-4 msg ${role === 'user' ? 'flex-row-reverse' : ''}`;
+            const bubble = role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-800/80 text-slate-200 rounded-tl-none border border-white/5';
+            
+            div.innerHTML = `
+                <div class="w-8 h-8 rounded-lg ${role === 'user' ? 'bg-slate-700' : 'bg-indigo-600'} flex-shrink-0 flex items-center justify-center text-[10px] font-bold">${role === 'user' ? 'U' : 'G'}</div>
+                <div class="max-w-[80%]">
+                    <div class="${bubble} p-4 rounded-2xl text-sm shadow-xl prose prose-invert">${role === 'ai' ? marked.parse(text) : text}</div>
+                </div>
+            `;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        };
+
+        const updateMemUI = () => {
+            const size = new Blob([JSON.stringify(history)]).size;
+            const fakeGB = (size / 1024 / 1024).toFixed(2); // Mocking the scale for the "100GB" feel
+            memText.innerText = `${fakeGB}MB`;
+            memFill.style.width = `${Math.min((size / 5000) * 100, 100)}%`;
+        };
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const val = input.value.trim();
+            if (!val) return;
+
+            renderMsg('user', val);
+            history.push({ role: "user", content: val });
+            input.value = '';
+
+            const loadId = 'L' + Date.now();
+            const loading = document.createElement('div');
+            loading.id = loadId;
+            loading.className = "text-[10px] text-indigo-400 font-mono animate-pulse";
+            loading.innerText = "ACCESSING NEURAL MEMORY...";
+            chat.appendChild(loading);
+
+            try {
+                const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: "google/gemini-2.0-flash-001", messages: history })
+                });
+
+                const data = await res.json();
+                document.getElementById(loadId).remove();
+                
+                const aiMsg = data.choices[0].message.content;
+                renderMsg('ai', aiMsg);
+                history.push({ role: "assistant", content: aiMsg });
+                
+                // Save to Hard Drive
+                localStorage.setItem('giva_memory', JSON.stringify(history));
+                updateMemUI();
+
+            } catch (err) {
+                document.getElementById(loadId).innerText = "MEMORY BANK ERROR.";
+            }
+        };
+
+        document.getElementById('reset').onclick = () => {
+            localStorage.removeItem('giva_memory');
+            location.reload();
+        };
+
+        init();
+    </script>
+</body>
+  </html>
+  
